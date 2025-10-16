@@ -2,7 +2,7 @@ use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 #[derive(Clone)]
-struct Versioned {
+pub struct Versioned {
     ver: u64,
     tomb: bool,
     val: Vec<u8>,
@@ -25,10 +25,10 @@ impl KeyValue {
         self.version.fetch_add(1, Ordering::Relaxed) + 1
     }
 
-    pub fn put(&self, key: &[u8], value: &[u8]) {
+    pub fn put(&self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
         let next_version = self.next_version();
         let versioned = Versioned { ver: next_version, tomb: false, val: value.to_vec() };
-        self.map.insert(key.to_vec(), versioned);
+        self.map.insert(key.to_vec(), versioned).map(|old| old.val)
     }
 
     pub fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
