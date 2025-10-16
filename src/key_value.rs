@@ -1,21 +1,40 @@
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use dashmap::DashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-pub struct KeyValue(Arc<RwLock<HashMap<Vec<u8>, Vec<u8>>>>);
+#[derive(Clone)]
+struct Versioned {
+    ver: u64,
+    tomb: bool,
+    val: Vec<u8>,
+}
+
+pub struct KeyValue {
+    map: DashMap<Vec<u8>, Versioned>,
+    version: AtomicU64,
+}
 
 impl KeyValue {
     pub fn new() -> Self {
-        KeyValue(Arc::new(RwLock::new(HashMap::new())))
+        KeyValue {
+            map: DashMap::new(),
+            version: AtomicU64::new(0),
+        }
+    }
+
+    fn next_version(&self) -> u64 {
+        self.version.fetch_add(1, Ordering::Relaxed) + 1
     }
 
     pub fn put(&self, key: &[u8], value: &[u8]) {
-        let mut map = self.0.write().unwrap();
-        map.insert(key.to_vec(), value.to_vec());
+        let next_version = self.next_version();
+        let versioned = Versioned { ver: next_version, tomb: false, val: value.to_vec() };
+        self.map.insert(key.to_vec(), versioned);
     }
 
     pub fn get(&self, key: &[u8]) -> Option<Vec<u8>> {
-        let map = self.0.read().unwrap();
-        map.get(key).cloned()
+        self.map
+            .get(key)
+            .and_then(|x| if x.tomb { None } else { Some(x.val.clone()) })
     }
 }
 
