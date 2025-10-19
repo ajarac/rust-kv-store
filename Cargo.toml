@@ -8,3 +8,4 @@ dashmap = "7.0.0-rc2"
 axum = "0.8.6"
 http = "1.3.1"
 tokio = { version = "1.48.0", features = ["rt-multi-thread"] }
+anyhow = "1.0.100"

@@ -1,12 +1,6 @@
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-
-#[derive(Clone)]
-pub struct Versioned {
-    ver: u64,
-    tomb: bool,
-    val: Vec<u8>,
-}
+use crate::types::versioned::Versioned;
 
 pub struct KeyValue {
     map: DashMap<Vec<u8>, Versioned>,
@@ -27,7 +21,7 @@ impl KeyValue {
 
     pub fn put(&self, key: &[u8], value: &[u8]) -> Option<Vec<u8>> {
         let next_version = self.next_version();
-        let versioned = Versioned { ver: next_version, tomb: false, val: value.to_vec() };
+        let versioned = Versioned::from_value(next_version, value);
         self.map.insert(key.to_vec(), versioned).map(|old| old.val)
     }
 
@@ -35,6 +29,14 @@ impl KeyValue {
         self.map
             .get(key)
             .and_then(|x| if x.tomb { None } else { Some(x.val.clone()) })
+    }
+
+    pub fn delete(&self, key: &[u8]) -> Option<Vec<u8>> {
+        let next_version = self.next_version();
+        let versioned = Versioned::tomb(next_version);
+        self.map
+            .insert(key.to_vec(), versioned)
+            .and_then(|old| if old.tomb { None } else { Some(old.val) })
     }
 }
 
@@ -61,5 +63,21 @@ mod tests {
         kv.put(b"key1", b"value1");
         assert_eq!(kv.get(b"key1"), Some(b"value1".to_vec()));
         assert_eq!(kv.get(b"key2"), None);
+    }
+
+    #[test]
+    fn test_delete() {
+        let kv = KeyValue::new();
+        kv.delete(b"key1");
+        assert_eq!(kv.get(b"key1"), None);
+    }
+
+    #[test]
+    fn test_put_and_delete() {
+        let kv = KeyValue::new();
+        kv.put(b"key1", b"value1");
+        assert_eq!(kv.get(b"key1"), Some(b"value1".to_vec()));
+        kv.delete(b"key1");
+        assert_eq!(kv.get(b"key1"), None);
     }
 }
